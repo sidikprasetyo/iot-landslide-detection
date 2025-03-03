@@ -8,8 +8,10 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
-import { AlertTriangle, AlertCircle, CheckCircle, BatteryMedium, PlugZap } from "lucide-react";
+import { AlertTriangle, AlertCircle, CheckCircle, BatteryFull, BatteryMedium, BatteryLow, PlugZap, Unplug } from "lucide-react";
 import { useSensorData } from "@/lib/hooks/useSensorData";
+import { useWebSocketSensorData } from "@/lib/hooks/useWebSocketSensorData";
+import { WebSocketStatus } from "@/components/WebSocketStatus";
 
 import {
     LineChart,
@@ -158,10 +160,10 @@ const SensorGauge = ({
         </svg>
         {/* Value and unit display */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl md:text-xl lg:text-2xl 2xl:text-3xl 3xl:text-4xl font-bold text-gray-800 dark:text-gray-100">
-            {value.toFixed(2)} {unit}
-          </span>
-        </div>
+        <span className="text-2xl md:text-xl lg:text-2xl 2xl:text-3xl 3xl:text-4xl font-bold">
+          {value.toFixed(2)} {unit}
+        </span>
+      </div>
       </div>
     </div>
   );
@@ -278,17 +280,41 @@ const PowerSourceIndicator = React.memo(({ source, battery }) => {
                 <span className="text-gray-800 dark:text-gray-100">Connected</span>
             </>
         );
-    }
-    return (
+    } 
+    else if (source === "Battery") {
+      return (
         <>
-            <BatteryMedium className="w-4 h-4 xl:w-5 xl:h-5 2xl:w-6 2xl:h-6 3xl:w-7 3xl:h-7 -ms-1 -translate-y-1 -rotate-90" />
-            <span>{`(${battery}%)`}</span>
+                {battery >= 75 ? (
+                    <>
+                        <BatteryFull className="w-4 h-4 xl:w-5 xl:h-5 2xl:w-6 2xl:h-6 3xl:w-7 3xl:h-7 -ms-1 -translate-y-1 -rotate-90 text-green-500" />
+                        <span className="text-green-500">Battery</span>
+                    </>
+                ) : battery >= 30 ? (
+                    <>
+                        <BatteryMedium className="w-4 h-4 xl:w-5 xl:h-5 2xl:w-6 2xl:h-6 3xl:w-7 3xl:h-7 -ms-1 -translate-y-1 -rotate-90 text-yellow-500" />
+                        <span className="text-yellow-500">Battery</span>
+                    </>
+                ) : (
+                    <>
+                        <BatteryLow className="w-4 h-4 xl:w-5 xl:h-5 2xl:w-6 2xl:h-6 3xl:w-7 3xl:h-7 -ms-1 -translate-y-1 -rotate-90 text-red-500" />
+                        <span className="text-red-500">Battery</span>
+                    </>
+                )}
+            </>
+    );
+    }
+    else {
+      return (
+        <>
+            <Unplug className="w-4 h-4 xl:w-5 xl:h-5 2xl:w-6 2xl:h-6 3xl:w-7 3xl:h-7 -ms-1" />
+            <span className="text-gray-800 dark:text-gray-100">Disconnected</span>
         </>
     );
+    }
 });
 
 // Component untuk status indicator yang dioptimalkan
-const StatusIndicator = React.memo(({ tilt, rainfall, moisture }) => {
+const StatusIndicator = React.memo(({ tilt, rainfall, moisture}) => {
     const getStatus = useCallback(() => {
         const isWetCondition = rainfall > 10 || moisture > 70;
         
@@ -350,59 +376,78 @@ const StatusIndicator = React.memo(({ tilt, rainfall, moisture }) => {
 // Definisikan konstanta di luar component agar tidak dibuat ulang setiap render
 const INACTIVE_THRESHOLD = 15000; // 15 seconds
 
-// SystemStatusCard component yang dioptimalkan
-const SystemStatusCard = ({ sensorData }) => {
-    const [systemState, setSystemState] = useState("Running");
-    const [lastActivity, setLastActivity] = useState(Date.now());
+// SystemStatusCard component yang diperbaiki
+const SystemStatusCard = ({ sensorData, isConnected }) => {
+  const [systemState, setSystemState] = useState("Initializing");
+  const [lastActivity, setLastActivity] = useState(Date.now());
+  
+  // Update lastActivity ketika menerima data sensor baru yang tidak stale
+  useEffect(() => {
+    if (sensorData && !sensorData.isStale) {
+      setLastActivity(Date.now());
+    }
+  }, [sensorData]);
+  
+  // Logic yang diperbarui untuk menentukan system state
+  useEffect(() => {
+    // Fungsi untuk mengevaluasi status sistem berdasarkan koneksi dan aktivitas
+    const evaluateSystemState = () => {
+      if (!isConnected || (sensorData && sensorData.isStale)) {
+        // Jika tidak terhubung atau data stale, tampilkan Disconnected
+        return "Disconnected";
+      }
+      
+      const timeSinceLastActivity = Date.now() - lastActivity;
+      
+      if (timeSinceLastActivity > INACTIVE_THRESHOLD) {
+        return "Inactive";
+      }
+      
+      return "Running";
+    };
+    
+    // Set state berdasarkan evaluasi
+    setSystemState(evaluateSystemState());
+    
+    // Jalankan interval untuk memeriksa status secara berkala
+    const intervalId = setInterval(() => {
+      setSystemState(evaluateSystemState());
+    }, 1000);
+    
+    return () => clearInterval(intervalId);
+  }, [isConnected, lastActivity, sensorData]);
 
-    // Callback untuk update last activity
-    const updateLastActivity = useCallback(() => {
-        setLastActivity(Date.now());
-    }, []);
-
-    // Effect untuk monitoring data updates
-    useEffect(() => {
-        updateLastActivity();
-    }, [sensorData, updateLastActivity]);
-
-    // Effect untuk monitoring system state dengan clear timer yang benar
-    useEffect(() => {
-        const checkSystemState = () => {
-            const timeSinceLastActivity = Date.now() - lastActivity;
-            setSystemState(timeSinceLastActivity > INACTIVE_THRESHOLD ? "Off" : "Running");
-        };
-
-        const intervalId = setInterval(checkSystemState, 1000);
-        return () => clearInterval(intervalId);
-    }, [lastActivity]); // Removed INACTIVE_THRESHOLD from dependencies
-
-    return (
-        <Card className="bg-white dark:bg-[#1A1E23] md:col-span-1">
-            <CardHeader className="3xl:mb-3">
-                <CardTitle className="text-gray-800 dark:text-gray-100 text-lg md:text-base lg:text-xl xl:text-xl 2xl:text-2xl 3xl:text-3xl font-bold text-center">
-                    Current State
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="-mt-2">
-                <InfoRow label="Power Resources">
-                    <PowerSourceIndicator 
-                        source={sensorData.powerSource}
-                        battery={sensorData.battery}
-                    />
-                </InfoRow>
-                <InfoRow label="System State &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;">
-                    <span className={systemState === "Running" ? "text-green-500" : "text-red-500"}>
-                        {systemState}
-                    </span>
-                </InfoRow>
-                <StatusIndicator 
-                    tilt={sensorData.tilt}
-                    rainfall={sensorData.rainfall}
-                    moisture={sensorData.moisture}
-                />
-            </CardContent>
-        </Card>
-    );
+  return (
+    <Card className="bg-white dark:bg-[#1A1E23] md:col-span-1">
+      <CardHeader className="3xl:mb-3">
+        <CardTitle className="text-gray-800 dark:text-gray-100 text-lg md:text-base lg:text-xl xl:text-xl 2xl:text-2xl 3xl:text-3xl font-bold text-center">
+          Current State
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="-mt-2">
+        <InfoRow label="Power Resources">
+          <PowerSourceIndicator
+            source={sensorData.powerSource}
+            battery={sensorData.battery}
+          />
+        </InfoRow>
+        <InfoRow label="System State &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;">
+          <span className={
+            systemState === "Running" ? "text-green-500" :
+            systemState === "Inactive" ? "text-yellow-500" :
+            systemState === "Initializing" ? "text-blue-500" : "text-red-500"
+          }>
+            {systemState}
+          </span>
+        </InfoRow>
+        <StatusIndicator
+          tilt={sensorData.tilt}
+          rainfall={sensorData.rainfall}
+          moisture={sensorData.moisture}
+        />
+      </CardContent>
+    </Card>
+  );
 };
 
 // Daily pattern chart component dijalankan dengan data
@@ -517,29 +562,31 @@ const DailyPatternChart = ({data}) => {
 
 // HomePage component yang lengkap
 const HomePage = () => {
-  const { sensorData, dailyPatternData, loading, error } = useSensorData();
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <p className="text-xl font-bold">Loading sensor data...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <p className="text-xl font-bold text-red-500">{error}</p>
-      </div>
-    );
-  }
+  const { dailyPatternData } = useSensorData();
+  const { 
+    sensorData, 
+    isConnected, 
+    error,
+  } = useWebSocketSensorData('ws://192.168.90.46:81');
 
   return (
     <div className="mx-4 mt-2 md:mx-8 lg:mx-12 md:mt-3">
+      {/* WebSocket Connection Status */}
+      <div className="flex justify-end mb-2">
+        <WebSocketStatus 
+          isConnected={isConnected} 
+          error={error}
+        />
+      </div>
+      {error && (
+        <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-300 px-4 py-2 rounded mb-4">
+          {error}
+        </div>
+      )}
+
       {/* First row of cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-4 lg:mb-6">
-        <SystemStatusCard sensorData={sensorData} />
+        <SystemStatusCard sensorData={sensorData} isConnected={isConnected} />
         <Card className="bg-white dark:bg-[#1A1E23] md:col-span-1">
           <CardHeader className="pb-0">
             <CardTitle className="text-gray-800 dark:text-gray-100 text-lg md:text-xl font-bold text-center">
@@ -605,7 +652,7 @@ const HomePage = () => {
               Daily Pattern
             </CardTitle>
             <CardDescription className="text-gray-400 dark:text-gray-300">
-              Tilt, rainfall, and moisture relationship
+              Tilt, rainfall, and moisture relationship on one day
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -13,7 +13,7 @@ import { fetchSensorData, fetchSensorDataByTimeRange, subscribeToSensorData } fr
 import { SensorData } from "@/types/sensor";
 
 // Custom label component for charts
-const CustomizedLabel = ({ x, y, stroke, value, dataKey }) => {
+const CustomizedLabel = ({ x, y, value, dataKey }) => {
   const colors = {
     tilt_angle: "#ef4444",
     rain_intensity: "#3b82f6",
@@ -104,6 +104,8 @@ const Dashboard = () => {
     const [totalData, setTotalData] = useState<SensorData[]>([]);
     const [timeFilter, setTimeFilter] = useState("all");
     const [loading, setLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
 
     // Fungsi untuk load data spesifik chart
     const loadChartData = async () => {
@@ -181,9 +183,16 @@ const Dashboard = () => {
 
     // Refresh data manual
     const refreshData = async () => {
-        await loadChartData();
-        await loadAllData();
-    };
+      setIsRefreshing(true); // Aktifkan animasi saat tombol diklik
+      try {
+          await loadChartData();
+          await loadAllData();
+      } finally {
+          setTimeout(() => {
+              setIsRefreshing(false); // Nonaktifkan animasi setelah selesai refresh
+          }, 800); // Beri delay kecil agar animasi terlihat
+      }
+  };
 
     // Gunakan data yang sesuai untuk masing-masing chart
     const filteredData = allData;
@@ -240,9 +249,9 @@ const Dashboard = () => {
     const moistureMaxLimit = 100;
   
     // Hitung persentase untuk progress bar
-    const tiltPercentage = (stats.avgTilt / tiltMaxLimit) * 100;
-    const rainPercentage = (stats.avgRainfall / rainMaxLimit) * 100;
-    const moisturePercentage = (stats.avgMoisture / moistureMaxLimit) * 100;
+    const tiltPercentage = (stats.currentTilt / tiltMaxLimit) * 100;
+    const rainPercentage = (stats.currentRainfall / rainMaxLimit) * 100;
+    const moisturePercentage = (stats.currentMoisture / moistureMaxLimit) * 100;
 
     // Export data to CSV
   const exportToCSV = () => {
@@ -299,8 +308,8 @@ const Dashboard = () => {
                   <SelectContent>
                     <SelectItem value="all">All Data</SelectItem>
                     <SelectItem value="1">Last Hour</SelectItem>
-                    <SelectItem value="2">Last 2 Hours</SelectItem>
-                    <SelectItem value="4">Last 4 Hours</SelectItem>
+                    <SelectItem value="6">Last 6 Hours</SelectItem>
+                    <SelectItem value="12">Last 12 Hours</SelectItem>
                   </SelectContent>
                 </Select>
                 
@@ -308,10 +317,10 @@ const Dashboard = () => {
                   variant="outline" 
                   className="flex items-center gap-1"
                   onClick={refreshData}
-                  disabled={loading}
+                  disabled={isRefreshing} // Gunakan isRefreshing bukan loading
                 >
-                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                  {loading ? 'Refreshing...' : 'Refresh'}
+                  <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  {isRefreshing ? 'Refreshing...' : 'Refresh'}
                 </Button>
                 
                 <Button 
