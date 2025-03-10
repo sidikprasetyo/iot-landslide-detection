@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo, RefObject } from "react";
 import {
     Card,
     CardContent,
@@ -24,8 +24,17 @@ import {
     ResponsiveContainer
 } from 'recharts';
 
+interface SensorGaugeProps {
+  value: number;
+  unit: string;
+  min?: number;
+  max?: number;
+  dangerThreshold?: number;
+  warningThreshold?: number;
+}
+
 // SensorGauge Component dengan throttle untuk performa
-const SensorGauge = ({ 
+const SensorGauge :  React.FC<SensorGaugeProps> = ({ 
   value, 
   unit, 
   min = 0, 
@@ -39,7 +48,7 @@ const SensorGauge = ({
   };
 
   // Dynamic strokeWidth based on screen size - dikonfigurasi ke object
-  const strokeWidthConfig = {
+  const strokeWidthConfig = useMemo(() => ({
     base: 22,
     xs: 23,      // 370px
     md: 21,      // 768px
@@ -47,21 +56,25 @@ const SensorGauge = ({
     xl: 23,      // 1280px
     '2xl': 25,   // 1536px
     '3xl': 33,   // 1700px
-  };
+}), []); // ✅ Tidak berubah di setiap render
+
 
   const [strokeWidth, setStrokeWidth] = useState(strokeWidthConfig.base);
-  const gaugeRef = useRef(null);
+  // const gaugeRef = useRef<HTMLDivElement>(null);
 
   // Throttle function untuk mengurangi beban resize events
-  const throttle = (func, delay) => {
+  const throttle = <T extends (...args: unknown[]) => unknown>(
+    func: T, 
+    delay: number
+  ) => {
     let lastCall = 0;
-    return function(...args) {
+    return function(this: unknown, ...args: Parameters<T>): ReturnType<T> | undefined {
       const now = new Date().getTime();
       if (now - lastCall < delay) {
-        return;
+        return undefined;
       }
       lastCall = now;
-      return func(...args);
+      return func.apply(this, args) as ReturnType<T>;
     };
   };
 
@@ -84,16 +97,26 @@ const SensorGauge = ({
     updateStrokeWidth(); // Initial call
     window.addEventListener('resize', throttledUpdate);
     return () => window.removeEventListener('resize', throttledUpdate);
-  }, []);
+  }, [strokeWidthConfig]);
   
-  // Gauge calculations hook untuk reusability
-  const useGaugeCalculations = (element, strokeW) => {
-    const [dimensions, setDimensions] = useState({
+  // First, correctly define the hook to handle the null possibility:
+  interface GaugeDimensions {
+    radius: number;
+    circumference: number;
+    viewBoxSize: number;
+  }
+  
+  // Update the type definition to better match React's ref typing
+  const useGaugeCalculations = (
+    element: React.RefObject<HTMLDivElement | null>, 
+    strokeW: number
+  ): GaugeDimensions => {
+    const [dimensions, setDimensions] = useState<GaugeDimensions>({
       radius: 0,
       circumference: 0,
       viewBoxSize: 0
     });
-
+  
     useEffect(() => {
       if (element.current) {
         const size = element.current.getBoundingClientRect().width;
@@ -108,11 +131,15 @@ const SensorGauge = ({
         });
       }
     }, [element, strokeW]);
-
+  
     return dimensions;
   };
-
-  const { radius, circumference, viewBoxSize } = useGaugeCalculations(gaugeRef, strokeWidth);
+  
+  // Define the ref as usual
+  const gaugeRef = useRef<HTMLDivElement>(null);
+  
+  // Use a type assertion when passing to the hook
+  const { radius, circumference, viewBoxSize } = useGaugeCalculations(gaugeRef as RefObject<HTMLDivElement>, strokeWidth);
 
   // Normalize value to percentage
   const normalizedValue = ((value - min) / (max - min)) * 100;
@@ -169,8 +196,12 @@ const SensorGauge = ({
   );
 };
 
+interface TiltStatusProps {
+  value: number;
+}
+
 // Status components with memoization
-const TiltStatus = React.memo(({ value }) => {
+const TiltStatus = React.memo(({ value } : TiltStatusProps) => {
     const getStatusDetails = () => {
       if (value <= 15) {
         return {
@@ -199,7 +230,13 @@ const TiltStatus = React.memo(({ value }) => {
     );
 });
 
-const RainStatus = React.memo(({ value }) => {
+TiltStatus.displayName = "TiltStatus";
+
+interface RainStatusProps {
+  value: number;
+}
+
+const RainStatus = React.memo(({ value } : RainStatusProps) => {
     const getStatusDetails = () => {
       if (value === 0) {
         return {
@@ -232,7 +269,13 @@ const RainStatus = React.memo(({ value }) => {
     );
 });
 
-const SoilStatus = React.memo(({ value }) => {
+RainStatus.displayName = "RainStatus";
+
+interface SoiilStatusProps {
+  value: number;
+}
+
+const SoilStatus = React.memo(({ value } : SoiilStatusProps) => {
     const getStatusDetails = () => {
       if (value <= 40) {
         return {
@@ -260,8 +303,15 @@ const SoilStatus = React.memo(({ value }) => {
     );
 });
 
+SoilStatus.displayName = "SoilStatus";
+
+interface InfoRowProps {
+    label: string;
+    children: React.ReactNode;
+}
+
 // InfoRow component with better naming and props
-const InfoRow = React.memo(({ label, children }) => (
+const InfoRow = React.memo(({ label, children } : InfoRowProps) => (
     <div className="flex items-center mb-1 3xl:mb-3">
         <span className="text-gray-800 dark:text-gray-100 text-sm md:text-xs lg:text-sm xl:text-base 2xl:text-xl 3xl:text-2xl font-bold w-32 md:w-28 lg:w-32 xl:w-40 2xl:w-48 3xl:w-60">
             {label} :
@@ -272,7 +322,14 @@ const InfoRow = React.memo(({ label, children }) => (
     </div>
 ));
 
-const PowerSourceIndicator = React.memo(({ source, battery }) => {
+InfoRow.displayName = "InfoRow";
+
+interface PowerSourceIndicatorProps {
+    source: string;
+    battery: number;
+}
+
+const PowerSourceIndicator = React.memo(({ source, battery } : PowerSourceIndicatorProps) => {
     if (source === "USB") {
         return (
             <>
@@ -313,8 +370,16 @@ const PowerSourceIndicator = React.memo(({ source, battery }) => {
     }
 });
 
+PowerSourceIndicator.displayName = "PowerSourceIndicator";
+
+interface StatusIndicatorProps {
+    tilt: number;
+    rainfall: number;
+    moisture: number;
+}
+
 // Component untuk status indicator yang dioptimalkan
-const StatusIndicator = React.memo(({ tilt, rainfall, moisture}) => {
+const StatusIndicator = React.memo(({ tilt, rainfall, moisture} : StatusIndicatorProps) => {
     const getStatus = useCallback(() => {
         const isWetCondition = rainfall > 10 || moisture > 70;
         
@@ -373,47 +438,57 @@ const StatusIndicator = React.memo(({ tilt, rainfall, moisture}) => {
     );
 });
 
-// Definisikan konstanta di luar component agar tidak dibuat ulang setiap render
-const INACTIVE_THRESHOLD = 15000; // 15 seconds
+StatusIndicator.displayName = "StatusIndicator";
 
-// SystemStatusCard component yang diperbaiki
-const SystemStatusCard = ({ sensorData, isConnected }) => {
-  const [systemState, setSystemState] = useState("Initializing");
-  const [lastActivity, setLastActivity] = useState(Date.now());
-  
+interface SensorData {
+  isStale: boolean;
+  powerSource: string;
+  battery: number;
+  tilt: number;
+  rainfall: number;
+  moisture: number;
+}
+
+interface SystemStatusCardProps {
+  sensorData: SensorData;
+  isConnected: boolean;
+}
+
+const INACTIVE_THRESHOLD = 5000; // Contoh threshold untuk menentukan status
+
+const SystemStatusCard: React.FC<SystemStatusCardProps> = ({ sensorData, isConnected }) => {
+  const [systemState, setSystemState] = useState<string>("Initializing");
+  const [lastActivity, setLastActivity] = useState<number>(Date.now());
+
   // Update lastActivity ketika menerima data sensor baru yang tidak stale
   useEffect(() => {
     if (sensorData && !sensorData.isStale) {
       setLastActivity(Date.now());
     }
   }, [sensorData]);
-  
+
   // Logic yang diperbarui untuk menentukan system state
   useEffect(() => {
-    // Fungsi untuk mengevaluasi status sistem berdasarkan koneksi dan aktivitas
     const evaluateSystemState = () => {
-      if (!isConnected || (sensorData && sensorData.isStale)) {
-        // Jika tidak terhubung atau data stale, tampilkan Disconnected
+      if (!isConnected || sensorData.isStale) {
         return "Disconnected";
       }
-      
+
       const timeSinceLastActivity = Date.now() - lastActivity;
-      
+
       if (timeSinceLastActivity > INACTIVE_THRESHOLD) {
         return "Inactive";
       }
-      
+
       return "Running";
     };
-    
-    // Set state berdasarkan evaluasi
+
     setSystemState(evaluateSystemState());
-    
-    // Jalankan interval untuk memeriksa status secara berkala
+
     const intervalId = setInterval(() => {
       setSystemState(evaluateSystemState());
     }, 1000);
-    
+
     return () => clearInterval(intervalId);
   }, [isConnected, lastActivity, sensorData]);
 
@@ -432,11 +507,17 @@ const SystemStatusCard = ({ sensorData, isConnected }) => {
           />
         </InfoRow>
         <InfoRow label="System State &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;">
-          <span className={
-            systemState === "Running" ? "text-green-500" :
-            systemState === "Inactive" ? "text-yellow-500" :
-            systemState === "Initializing" ? "text-blue-500" : "text-red-500"
-          }>
+          <span
+            className={
+              systemState === "Running"
+                ? "text-green-500"
+                : systemState === "Inactive"
+                ? "text-yellow-500"
+                : systemState === "Initializing"
+                ? "text-blue-500"
+                : "text-red-500"
+            }
+          >
             {systemState}
           </span>
         </InfoRow>
@@ -451,15 +532,22 @@ const SystemStatusCard = ({ sensorData, isConnected }) => {
 };
 
 // Daily pattern chart component dijalankan dengan data
-const CustomizedLabel = ({ x, y, value, dataKey }) => {
-  const colors = {
+interface CustomizedLabelProps {
+  x: number;
+  y: number;
+  value: number;
+  dataKey: string;
+}
+
+const CustomizedLabel: React.FC<CustomizedLabelProps> = ({ x, y, value, dataKey }) => {
+  const colors: Record<string, string> = {
     tilt: "#ef4444",
     rainfall: "#3b82f6",
-    moisture: "#22c55e"
+    moisture: "#22c55e",
   };
-  
-  const displayValue = parseFloat(value).toFixed(1);
-  
+
+  const displayValue = value.toFixed(1); // value sudah bertipe number
+
   return (
     <text 
       x={x} 
@@ -474,7 +562,18 @@ const CustomizedLabel = ({ x, y, value, dataKey }) => {
   );
 };
 
-const DailyPatternChart = ({data}) => {
+interface DataPoint {
+  time: string;
+  tilt: number;
+  rainfall: number;
+  moisture: number;
+}
+
+interface DailyPatternChartProps {
+  data: DataPoint[];
+}
+
+const DailyPatternChart: React.FC<DailyPatternChartProps> = ({ data }) => {
   return (
     <div className="w-full h-[25vh] md:h-[16vh] lg:h-[32vh]">
       <ResponsiveContainer width="100%" height="100%">
@@ -514,13 +613,17 @@ const DailyPatternChart = ({data}) => {
               fontWeight: "bold",
               color: "#FF00FF",
             }}
-            formatter={(value, name) => {
-              const units = {
+            formatter={(value: number | string, name: string) => {
+              const units: Record<string, string> = {
                 tilt: "°",
                 rainfall: "mm/h",
                 moisture: "%"
               };
-              return [`${parseFloat(value).toFixed(2)} ${units[name] || ""}`, name];
+
+              // Pastikan value adalah number sebelum memanggil toFixed
+              const numericValue = typeof value === "number" ? value : parseFloat(value);
+
+              return [`${numericValue.toFixed(2)} ${units[name] || ""}`, name];
             }}
           />
           <Legend />
@@ -532,7 +635,7 @@ const DailyPatternChart = ({data}) => {
             strokeWidth={2} 
             dot={{ r: 2, fill: "#ef4444", stroke: "#ef4444" }} 
             activeDot={{ r: 4, fill: "#ef4444", stroke: "#ef4444" }}
-            label={<CustomizedLabel dataKey="tilt" />} 
+            label={(props) => <CustomizedLabel {...props} dataKey="tilt" />} 
           />
           <Line
             type="monotone" 
@@ -542,7 +645,7 @@ const DailyPatternChart = ({data}) => {
             strokeWidth={2} 
             dot={{ r: 2, fill: "#3b82f6", stroke: "#3b82f6" }} 
             activeDot={{ r: 4, fill: "#3b82f6", stroke: "#3b82f6" }}
-            label={<CustomizedLabel dataKey="rainfall" />} 
+            label={(props) => <CustomizedLabel {...props} dataKey="rainfall" />}
           />
           <Line 
             type="monotone"
@@ -552,7 +655,7 @@ const DailyPatternChart = ({data}) => {
             strokeWidth={2} 
             dot={{ r: 2, fill: "#22c55e", stroke: "#22c55e" }} 
             activeDot={{ r: 4, fill: "#22c55e", stroke: "#22c55e" }}
-            label={<CustomizedLabel dataKey="moisture" />} 
+            label={(props) => <CustomizedLabel {...props} dataKey="moisture" />} 
           />
         </LineChart>
       </ResponsiveContainer>
@@ -586,7 +689,7 @@ const HomePage = () => {
 
       {/* First row of cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-4 lg:mb-6">
-        <SystemStatusCard sensorData={sensorData} isConnected={isConnected} />
+      <SystemStatusCard sensorData={{ ...sensorData, isStale: sensorData.isStale ?? false }} isConnected={isConnected} />
         <Card className="bg-white dark:bg-[#1A1E23] md:col-span-1">
           <CardHeader className="pb-0">
             <CardTitle className="text-gray-800 dark:text-gray-100 text-lg md:text-xl font-bold text-center">

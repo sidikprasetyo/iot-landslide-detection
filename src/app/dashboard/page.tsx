@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, FC } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,17 +10,24 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchSensorData, fetchSensorDataByTimeRange, subscribeToSensorData } from "@/lib/sensorService";
-import { SensorData } from "@/types/sensor";
+import { DailyPatternData, SensorData } from "@/types/sensor";
+
+interface CustomizedLabelProps {
+  x: number;
+  y: number;
+  value: string | number;
+  dataKey: string;
+}
 
 // Custom label component for charts
-const CustomizedLabel = ({ x, y, value, dataKey }) => {
-  const colors = {
-    tilt_angle: "#ef4444",
-    rain_intensity: "#3b82f6",
-    soil_moisture: "#22c55e"
+const CustomizedLabel: FC<CustomizedLabelProps> = ({ x, y, value, dataKey }) => {
+  const colors: Record<string, string> = {
+    tilt: "#ef4444",
+    rainfall: "#3b82f6",
+    moisture: "#22c55e",
   };
   
-  const displayValue = parseFloat(value).toFixed(1);
+  const displayValue = parseFloat(String(value)).toFixed(2);
   
   return (
     <text 
@@ -36,8 +43,23 @@ const CustomizedLabel = ({ x, y, value, dataKey }) => {
   );
 };
 
+interface DataPoint {
+  time: string;
+  tilt?: number;
+  rainfall?: number;
+  moisture?: number;
+}
+
+interface DataChartProps {
+  data: DataPoint[]; // Array berisi objek DataPoint
+  dataKey: keyof DataPoint; // Memastikan hanya memilih key yang valid
+  color: string;
+  name: string;
+  unit?: string;
+}
+
 // Component for charts with shared logic
-const DataChart = ({ data, dataKey, color, name, unit }) => {
+const DataChart = ({ data, dataKey, color, name, unit }: DataChartProps) => {
   return (
     <div className="w-full h-[25vh] md:h-[16vh] lg:h-[34vh]">
       <ResponsiveContainer width="100%" height="100%">
@@ -77,7 +99,7 @@ const DataChart = ({ data, dataKey, color, name, unit }) => {
               fontWeight: "bold",
               color: "#FF00FF"
             }}
-            formatter={(value) => [`${parseFloat(value).toFixed(2)} ${unit}`, name]}
+            formatter={(value) => [`${Number(value).toFixed(2)} ${unit}`, name]}
           />
           <Legend />
           <Line 
@@ -87,8 +109,8 @@ const DataChart = ({ data, dataKey, color, name, unit }) => {
             stroke={color} 
             strokeWidth={2} 
             dot={{ r: 2, fill: color, stroke: color }} 
-            activeDot={{ r: 4, fill: color, stroke: {color} }}
-            label={<CustomizedLabel dataKey={dataKey} />} 
+            activeDot={{ r: 4, fill: color, stroke: color }}
+            label={(props) => <CustomizedLabel {...props} dataKey={dataKey} />} 
           />
         </LineChart>
       </ResponsiveContainer>
@@ -103,12 +125,12 @@ const Dashboard = () => {
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [totalData, setTotalData] = useState<SensorData[]>([]);
     const [timeFilter, setTimeFilter] = useState("all");
-    const [loading, setLoading] = useState(true);
+    const [, setLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
 
     // Fungsi untuk load data spesifik chart
-    const loadChartData = async () => {
+    const loadChartData = useCallback(async () => {
       setLoading(true);
       try {
           let filteredData;
@@ -121,11 +143,11 @@ const Dashboard = () => {
           }
           
           // Ambil 8 data terbaru dari hasil yang sudah difilter
-          const latest8Data = filteredData.slice(-8);  // Mengambil 8 data terakhir
+          const latest8Data = filteredData.slice(-8);
           setTiltRainData(latest8Data);
           
           // Ambil 16 data terbaru dari hasil yang sudah difilter
-          const latest16Data = filteredData.slice(-16);  // Mengambil 16 data terakhir
+          const latest16Data = filteredData.slice(-16);
           setMoistureData(latest16Data);
           
           setLastUpdated(new Date());
@@ -134,20 +156,17 @@ const Dashboard = () => {
       } finally {
           setLoading(false);
       }
-  };
-
-    // Fungsi untuk load semua data (untuk tabel)
-    const loadAllData = async () => {
+  }, [timeFilter]); // ✅ Pastikan `timeFilter` sebagai dependensi
+  
+  const loadAllData = useCallback(async () => {
       setLoading(true);
       try {
-          // Selalu ambil semua data untuk perhitungan total
           const allDataResult = await fetchSensorData();
           setTotalData(allDataResult);
           
-          // Ambil data berdasarkan filter untuk ditampilkan
           let filteredDataResult;
           if (timeFilter === "all") {
-              filteredDataResult = allDataResult; // Gunakan data yang sama jika "all"
+              filteredDataResult = allDataResult;
           } else {
               filteredDataResult = await fetchSensorDataByTimeRange(parseInt(timeFilter));
           }
@@ -159,27 +178,23 @@ const Dashboard = () => {
       } finally {
           setLoading(false);
       }
-  };
-
-    // Setup Supabase realtime subscription
-    useEffect(() => {
-        loadChartData();
-        loadAllData();
-
-        // Setup realtime subscription
-        const subscription = subscribeToSensorData(async (payload) => {
-            console.log('Received realtime update:', payload);
-            
-            // Refresh data saat ada update baru
-            await loadChartData();
-            await loadAllData();
-        });
-
-        // Cleanup subscription when component unmounts
-        return () => {
-            subscription.unsubscribe();
-        };
-    }, [timeFilter]);
+  }, [timeFilter]); // ✅ Pastikan `timeFilter` sebagai dependensi
+  
+  // Setup Supabase realtime subscription
+  useEffect(() => {
+      loadChartData();
+      loadAllData();
+  
+      const subscription = subscribeToSensorData(async (payload) => {
+          console.log("Received realtime update:", payload);
+          await loadChartData();
+          await loadAllData();
+      });
+  
+      return () => {
+          subscription.unsubscribe();
+      };
+  }, [timeFilter, loadChartData, loadAllData]); // ✅ Tambahkan `loadChartData` & `loadAllData` sebagai dependensi  
 
     // Refresh data manual
     const refreshData = async () => {
@@ -198,7 +213,7 @@ const Dashboard = () => {
     const filteredData = allData;
     
     // Calculate stats from current data
-    const calculateStats = (data) => {
+    const calculateStats = (data: DailyPatternData[]) => {
       if (data.length === 0) {
         return {
           avgTilt: "0.00",
@@ -214,19 +229,19 @@ const Dashboard = () => {
       }
       
       // Menghitung rata-rata dari data
-      const avgTilt = data.reduce((acc, curr) => acc + curr.tilt_angle, 0) / data.length;
-      const avgRainfall = data.reduce((acc, curr) => acc + curr.rain_intensity, 0) / data.length;
-      const avgMoisture = data.reduce((acc, curr) => acc + curr.soil_moisture, 0) / data.length;
+      const avgTilt = data.reduce((acc, curr) => acc + curr.tilt, 0) / data.length;
+      const avgRainfall = data.reduce((acc, curr) => acc + curr.rainfall, 0) / data.length;
+      const avgMoisture = data.reduce((acc, curr) => acc + curr.moisture, 0) / data.length;
       
       // Current values (latest readings)
-      const currentTilt = data[data.length - 1].tilt_angle;
-      const currentRainfall = data[data.length - 1].rain_intensity;
-      const currentMoisture = data[data.length - 1].soil_moisture;
+      const currentTilt = data[data.length - 1].tilt;
+      const currentRainfall = data[data.length - 1].rainfall;
+      const currentMoisture = data[data.length - 1].moisture;
       
       // Max values
-      const maxTilt = Math.max(...data.map(item => item.tilt_angle));
-      const maxRainfall = Math.max(...data.map(item => item.rain_intensity));
-      const maxMoisture = Math.max(...data.map(item => item.soil_moisture));
+      const maxTilt = Math.max(...data.map(item => item.tilt));
+      const maxRainfall = Math.max(...data.map(item => item.rainfall));
+      const maxMoisture = Math.max(...data.map(item => item.moisture));
       
       return {
         avgTilt: avgTilt.toFixed(2),
@@ -241,7 +256,14 @@ const Dashboard = () => {
       };
     };
     
-    const stats = calculateStats(filteredData);
+    const convertedData: DailyPatternData[] = filteredData.map((data) => ({
+      tilt: data.tilt_angle, 
+      rainfall: data.rain_intensity, 
+      moisture: data.soil_moisture,
+      time: data.created_at,
+    }));    
+    
+    const stats = calculateStats(convertedData);    
     
     // Batas maksimum sesuai permintaan
     const tiltMaxLimit = 90;
@@ -249,9 +271,9 @@ const Dashboard = () => {
     const moistureMaxLimit = 100;
   
     // Hitung persentase untuk progress bar
-    const tiltPercentage = (stats.currentTilt / tiltMaxLimit) * 100;
-    const rainPercentage = (stats.currentRainfall / rainMaxLimit) * 100;
-    const moisturePercentage = (stats.currentMoisture / moistureMaxLimit) * 100;
+    const tiltPercentage = (Number(stats.currentTilt) / Number(tiltMaxLimit)) * 100;
+    const rainPercentage = (Number(stats.currentRainfall) / Number(rainMaxLimit)) * 100;
+    const moisturePercentage = (Number(stats.currentMoisture) / Number(moistureMaxLimit)) * 100;
 
     // Export data to CSV
   const exportToCSV = () => {
@@ -435,8 +457,8 @@ const Dashboard = () => {
                     </CardHeader>
                     <CardContent>
                       <DataChart 
-                        data={tiltRainData} 
-                        dataKey="tilt_angle" 
+                        data={tiltRainData as DataPoint[]} 
+                        dataKey="tilt" 
                         color="#ef4444" 
                         name="Tilt Angle" 
                         unit="°" 
@@ -454,8 +476,8 @@ const Dashboard = () => {
                     </CardHeader>
                     <CardContent>
                       <DataChart 
-                        data={tiltRainData} 
-                        dataKey="rain_intensity" 
+                        data={tiltRainData as DataPoint[]} 
+                        dataKey="rainfall" 
                         color="#3b82f6" 
                         name="Rain Intensity" 
                         unit="mm/h" 
@@ -473,8 +495,8 @@ const Dashboard = () => {
                     </CardHeader>
                     <CardContent>
                       <DataChart 
-                        data={moistureData} 
-                        dataKey="soil_moisture" 
+                        data={moistureData as DataPoint[]} 
+                        dataKey="moisture" 
                         color="#22c55e" 
                         name="Soil Moisture" 
                         unit="%" 

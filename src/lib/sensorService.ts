@@ -145,7 +145,7 @@ export async function fetchSensorDataByTimeRange(hours: number): Promise<SensorD
 }
 
 // Fungsi untuk setup realtime subscription
-export function subscribeToSensorData(callback: (payload: any) => void) {
+export function subscribeToSensorData(callback: (payload: { new?: SensorData }) => void) {
   console.log('Setting up realtime subscription for sensor_data table');
   
   const subscription = supabase

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   fetchLatestSensorData, 
   fetchLast24HoursSensorData, 
@@ -21,36 +21,30 @@ export const useSensorData = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Helper function to convert raw sensor data to formatted data
-  const formatSensorData = (data: SensorData): FormattedSensorData => {
-    return {
-      tilt: data.tilt_angle,
-      rainfall: data.rain_intensity,
-      moisture: data.soil_moisture,
-      battery: data.battery_percentage,
-      powerSource: data.power_source,
-      lastUpdated: data.created_at
-    };
-  };
+  const formatSensorData = (data: SensorData): FormattedSensorData => ({
+    tilt: data.tilt_angle,
+    rainfall: data.rain_intensity,
+    moisture: data.soil_moisture,
+    battery: data.battery_percentage,
+    powerSource: data.power_source,
+    lastUpdated: data.created_at
+  });
 
-  const processDailyPatternData = async () => {
+  const processDailyPatternData = useCallback(async () => {
     try {
       const data = await fetchLast24HoursSensorData();
-  
+
       if (data && Array.isArray(data) && data.length > 0) {
-        // Pastikan data diurutkan dari yang terbaru ke yang lama
         const sortedData = data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  
-        // Ambil hanya 8 data terbaru
-        const latestData = sortedData.slice(0, 8).reverse(); // Ambil 8 data terbaru
-  
-        // Format data agar sesuai untuk chart
+        const latestData = sortedData.slice(0, 8).reverse();
+
         const formattedData: DailyPatternData[] = latestData.map(item => ({
-          time: new Date(item.created_at).toLocaleTimeString(), // Format jam:menit
+          time: new Date(item.created_at).toLocaleTimeString(),
           tilt: Number(item.tilt_angle) || 0,
           rainfall: Number(item.rain_intensity) || 0,
           moisture: Number(item.soil_moisture) || 0
         }));
-  
+
         setDailyPatternData(formattedData);
       } else {
         setDailyPatternData([]);
@@ -61,31 +55,38 @@ export const useSensorData = () => {
     } finally {
       setLoading(false);
     }
-  };  
+  }, []);
 
   // Load initial data
-  const loadInitialData = async () => {
+  const loadInitialData = useCallback(async () => {
     try {
       setLoading(true);
-
       const latestData = await fetchLatestSensorData();
-      
-      if (latestData)
-        setSensorData(formatSensorData(latestData));
+
+      if (latestData) setSensorData(formatSensorData(latestData));
       await processDailyPatternData();
     } catch {
       setError('Failed to load initial data');
     } finally {
       setLoading(false);
     }
+  }, [processDailyPatternData]);
+
+  const defaultSensorData: SensorData = {
+    id: 0,
+    created_at: new Date().toISOString(),
+    tilt_angle: 0,
+    rain_intensity: 0,
+    soil_moisture: 0,
+    battery_percentage: 0,
+    power_source: 'Battery'
   };
 
   useEffect(() => {
     loadInitialData();
 
     const subscription = subscribeToSensorData((newData) => {
-
-      setSensorData(formatSensorData(newData));
+      setSensorData(formatSensorData(newData?.new ?? defaultSensorData));
 
       processDailyPatternData();
     });
@@ -93,7 +94,7 @@ export const useSensorData = () => {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [loadInitialData, processDailyPatternData]);
 
   return { sensorData, dailyPatternData, loading, error };
 };

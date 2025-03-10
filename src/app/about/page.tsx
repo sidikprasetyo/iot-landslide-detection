@@ -59,7 +59,7 @@ const About = () => {
                                                 className="object-cover"
                                             />
                                             <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                                                <h2 className="text-3xl font-semibold text-gray-100">About System {image.id}</h2>
+                                                {/* <h2 className="text-3xl font-semibold text-gray-100">About System {image.id}</h2> */}
                                             </div>
                                         </div>
                                     </CardContent>
@@ -74,15 +74,12 @@ const About = () => {
                 </Carousel>
             </div>
             <article className="mx-4 mt-6 md:mx-8 lg:mx-12 md:mt-3 mb-8 md:mt-8 md:mb-10 space-y-4 text-justify text-sm md:text-base lg:text-lg text-gray-800 dark:text-gray-100">
-                <h1 className="text-xl md:text-2xl lg:text-3xl font-bold mb-4">About Landslide Detection</h1>
+                <h1 className="text-xl md:text-2xl lg:text-3xl font-bold mb-4">Landslide Detection System</h1>
                 <p>
-                    Perusahaan kami didirikan dengan visi untuk memberikan layanan terbaik di bidangnya. Dengan tim profesional yang berpengalaman, kami berkomitmen untuk selalu mengutamakan kualitas dan kepuasan pelanggan dalam setiap aspek layanan kami.
+                    This landslide early detection system is an Internet of Things-based solution designed to monitor soil conditions in real time and provide early warnings of potential landslides. The device uses an ESP32 microcontroller and is equipped with various sensors, including the MPU6050 tilt sensor, Raindrop YL-83 rain sensor, and capacitive soil moisture sensor. To ensure reliable power supply, the system can operate using either a battery or a direct USB adapter, with battery capacity monitored through the INA219 DC current sensor. Additionally, it features a buzzer and an RGB LED 140C05 to provide both visual and audio alerts when hazardous conditions are detected.
                 </p>
                 <p>
-                    Selama bertahun-tahun, kami telah membangun reputasi sebagai pemimpin industri yang inovatif dan terpercaya. Nilai-nilai inti kami meliputi integritas, transparansi, dan dedikasi untuk kesempurnaan. Kami terus beradaptasi dengan perkembangan teknologi dan tren pasar untuk memastikan bahwa solusi yang kami tawarkan selalu relevan dan efektif.
-                </p>
-                <p>
-                    Kami percaya bahwa kesuksesan kami terkait erat dengan kesuksesan klien kami. Itulah mengapa kami selalu berusaha memahami kebutuhan unik setiap klien dan menyediakan solusi yang disesuaikan untuk memenuhi tujuan bisnis mereka.
+                    Sensor data is transmitted in real time to the website’s main page using WebSocket, allowing users to monitor environmental changes instantly. Furthermore, every five seconds, the data is sent to a Supabase database for storage and further analysis. On the website’s dashboard, users can access historical data records to observe environmental trends over time. By integrating these technologies, the landslide early detection system helps mitigate disaster risks by providing accurate and timely information to users.
                 </p>
             </article>
         </section>

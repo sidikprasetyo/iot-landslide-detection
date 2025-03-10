@@ -154,7 +154,7 @@ const Navbar = () => {
           </li>
           <li className="text-center flex justify-center items-center" role="menuitem">
             <button 
-              onClick={() => { toggleDarkMode(); }} 
+              onClick={() => { toggleDarkMode(); closeMenu(); }} 
               className="block text-[#007BFF]  hover:bg-gray-100 dark:hover:bg-gray-800 py-2 px-4 rounded transition-colors duration-300 flex items-center"
               aria-label={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
             >
