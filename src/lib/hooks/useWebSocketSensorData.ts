@@ -30,7 +30,7 @@ const defaultSensorData: SensorData = {
 };
 
 export const useWebSocketSensorData = (
-  wsUrl: string = 'ws://192.168.90.46:81'
+  wsUrl: string = 'ws://192.168.8.46:81'
 ): WebSocketSensorDataResult => {
   const [sensorData, setSensorData] = useState<SensorData>(defaultSensorData);
   const [isConnected, setIsConnected] = useState<boolean>(false);
