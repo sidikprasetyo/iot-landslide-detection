@@ -670,7 +670,7 @@ const HomePage = () => {
     sensorData, 
     isConnected, 
     error,
-  } = useWebSocketSensorData('ws://192.168.8.46:81');
+  } = useWebSocketSensorData('ws://192.168.152.100:81');
 
   return (
     <div className="mx-4 mt-2 md:mx-8 lg:mx-12 md:mt-3">
