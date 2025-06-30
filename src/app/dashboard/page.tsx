@@ -523,15 +523,20 @@ const Dashboard = () => {
                       <Table className="border-2">
                         <TableHeader className="sticky top-0 bg-[#22c55e] border-2 z-10">
                           <TableRow>
-                            <TableHead className="text-gray-100 text-xs sm:text-sm border-2 font-semibold text-center">Timestamp</TableHead>
+                            <TableHead className="text-gray-100 text-xs sm:text-sm border-2 font-semibold text-center">Date</TableHead>
+                            <TableHead className="text-gray-100 text-xs sm:text-sm border-2 font-semibold text-center">Time</TableHead>
                             <TableHead className="text-gray-100 text-right text-xs sm:text-sm border-2 font-semibold text-center">Tilt (°)</TableHead>
                             <TableHead className="text-gray-100 text-right text-xs sm:text-sm border-2 font-semibold text-center">Rain (mm/h)</TableHead>
                             <TableHead className="text-gray-100 text-right text-xs sm:text-sm border-2 font-semibold text-center">Moisture (%)</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredData.map((row, index) => (
+                          {filteredData
+                            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                            .map((row, index) => (
                             <TableRow key={index}>
+                              <TableCell className="font-medium text-gray-800 dark:text-gray-100 text-xs sm:text-sm text-center border-2">
+                                {new Date(row.created_at).toLocaleDateString()}</TableCell>
                               <TableCell className="font-medium text-gray-800 dark:text-gray-100 text-xs sm:text-sm text-center border-2">
                                 {new Date(row.created_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
                               </TableCell>
